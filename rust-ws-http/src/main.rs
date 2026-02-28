@@ -42,6 +42,6 @@ async fn main() {
 
     info!("Server listening on {}", addr);
 
-    // Start server using axum 0.7 API
+    // Start server using axum 0.8 API
     axum::serve(listener, app).await.expect("Server failed");
 }
