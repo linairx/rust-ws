@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebSocket Proxy Server</title>
+    <title>World Clock</title>
     <style>
         * {
             margin: 0;
@@ -11,201 +11,247 @@
             box-sizing: border-box;
         }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: #eee;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
             min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
+            padding: 40px 20px;
         }
-        .container {
-            max-width: 600px;
-            width: 100%;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            backdrop-filter: blur(10px);
-        }
-        h1 {
+        .header {
             text-align: center;
-            margin-bottom: 30px;
-            font-size: 2em;
-            background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+            margin-bottom: 50px;
+        }
+        .header h1 {
+            font-size: 3em;
+            background: linear-gradient(90deg, #f093fb, #f5576c);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+        .header .local-time {
+            font-size: 1.5em;
+            color: rgba(255,255,255,0.7);
+        }
+        .clock-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .clock-card {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .clock-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+        .clock-card.highlight {
+            background: rgba(102, 126, 234, 0.2);
+            border-color: rgba(102, 126, 234, 0.5);
+        }
+        .city-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .city-name {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #fff;
+        }
+        .city-flag {
+            font-size: 1.8em;
+        }
+        .timezone {
+            font-size: 0.85em;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 20px;
+        }
+        .time-display {
+            font-size: 2.8em;
+            font-weight: 700;
+            font-family: 'Monaco', 'Consolas', monospace;
+            background: linear-gradient(90deg, #667eea, #764ba2);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
-        .status {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            margin-bottom: 30px;
+        .date-display {
+            font-size: 0.95em;
+            color: rgba(255,255,255,0.6);
+            margin-top: 10px;
         }
-        .status-dot {
-            width: 12px;
-            height: 12px;
-            background: #00ff88;
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        .status-text {
-            color: #00ff88;
-            font-weight: 500;
-        }
-        .info-box {
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        .info-title {
-            font-size: 0.9em;
-            color: #888;
-            margin-bottom: 10px;
-        }
-        .info-content {
-            font-family: 'Monaco', 'Consolas', monospace;
-            font-size: 0.85em;
-            word-break: break-all;
-            color: #00d2ff;
-        }
-        .btn {
-            display: block;
-            width: 100%;
-            padding: 15px;
-            margin-top: 20px;
-            background: linear-gradient(90deg, #00d2ff, #3a7bd5);
-            border: none;
-            border-radius: 10px;
-            color: white;
-            font-size: 1em;
+        .day-indicator {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75em;
             font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-            text-align: center;
-            text-decoration: none;
+            margin-top: 15px;
         }
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(0, 210, 255, 0.3);
+        .day-indicator.day {
+            background: rgba(255, 200, 87, 0.2);
+            color: #ffc857;
         }
-        .features {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 15px;
-            margin-top: 30px;
-        }
-        .feature {
-            text-align: center;
-            padding: 15px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 10px;
-        }
-        .feature-icon {
-            font-size: 2em;
-            margin-bottom: 10px;
-        }
-        .feature-name {
-            font-size: 0.85em;
-            color: #aaa;
+        .day-indicator.night {
+            background: rgba(102, 126, 234, 0.2);
+            color: #667eea;
         }
         .footer {
             text-align: center;
-            margin-top: 30px;
-            font-size: 0.8em;
-            color: #666;
+            margin-top: 60px;
+            color: rgba(255,255,255,0.4);
+            font-size: 0.9em;
+        }
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        @media (max-width: 600px) {
+            .header h1 { font-size: 2em; }
+            .time-display { font-size: 2em; }
+            .clock-card { padding: 20px; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>WebSocket Proxy</h1>
+    <div class="header">
+        <h1>World Clock</h1>
+        <div class="local-time" id="local-time"></div>
+    </div>
 
-        <div class="status">
-            <div class="status-dot"></div>
-            <span class="status-text">Server Running</span>
-        </div>
+    <div class="clock-grid" id="clock-grid"></div>
 
-        <div class="info-box">
-            <div class="info-title">Supported Protocols</div>
-            <div class="info-content">VLESS | Trojan | Shadowsocks</div>
-        </div>
-
-        <div class="info-box">
-            <div class="info-title">WebSocket Path</div>
-            <div class="info-content" id="ws-path">Loading...</div>
-        </div>
-
-        <div class="info-box">
-            <div class="info-title">Subscription Link</div>
-            <div class="info-content" id="sub-link">Loading...</div>
-        </div>
-
-        <a href="#" class="btn" id="copy-btn">Copy Subscription Link</a>
-        <a href="#" class="btn" id="download-btn" style="background: linear-gradient(90deg, #3a7bd5, #00d2ff);">Download Subscription</a>
-
-        <div class="features">
-            <div class="feature">
-                <div class="feature-icon">🔒</div>
-                <div class="feature-name">Secure</div>
-            </div>
-            <div class="feature">
-                <div class="feature-icon">⚡</div>
-                <div class="feature-name">Fast</div>
-            </div>
-            <div class="feature">
-                <div class="feature-icon">🦀</div>
-                <div class="feature-name">Rust</div>
-            </div>
-        </div>
-
-        <div class="footer">
-            Built with Rust + Axum + Tokio
-        </div>
+    <div class="footer">
+        Built with Rust + Axum | <a href="/sub">Subscription</a>
     </div>
 
     <script>
-        // Get current host and port
-        const protocol = window.location.protocol;
-        const host = window.location.host;
-        const pathname = window.location.pathname;
+        const cities = [
+            { name: 'Beijing', flag: '🇨🇳', timezone: 'Asia/Shanghai', label: '北京' },
+            { name: 'Tokyo', flag: '🇯🇵', timezone: 'Asia/Tokyo', label: '东京' },
+            { name: 'Seoul', flag: '🇰🇷', timezone: 'Asia/Seoul', label: '首尔' },
+            { name: 'Singapore', flag: '🇸🇬', timezone: 'Asia/Singapore', label: '新加坡' },
+            { name: 'Dubai', flag: '🇦🇪', timezone: 'Asia/Dubai', label: '迪拜' },
+            { name: 'Moscow', flag: '🇷🇺', timezone: 'Europe/Moscow', label: '莫斯科' },
+            { name: 'London', flag: '🇬🇧', timezone: 'Europe/London', label: '伦敦' },
+            { name: 'Paris', flag: '🇫🇷', timezone: 'Europe/Paris', label: '巴黎' },
+            { name: 'Berlin', flag: '🇩🇪', timezone: 'Europe/Berlin', label: '柏林' },
+            { name: 'New York', flag: '🇺🇸', timezone: 'America/New_York', label: '纽约' },
+            { name: 'Los Angeles', flag: '🇺🇸', timezone: 'America/Los_Angeles', label: '洛杉矶' },
+            { name: 'Chicago', flag: '🇺🇸', timezone: 'America/Chicago', label: '芝加哥' },
+            { name: 'Toronto', flag: '🇨🇦', timezone: 'America/Toronto', label: '多伦多' },
+            { name: 'São Paulo', flag: '🇧🇷', timezone: 'America/Sao_Paulo', label: '圣保罗' },
+            { name: 'Sydney', flag: '🇦🇺', timezone: 'Australia/Sydney', label: '悉尼' },
+            { name: 'Melbourne', flag: '🇦🇺', timezone: 'Australia/Melbourne', label: '墨尔本' },
+            { name: 'Auckland', flag: '🇳🇿', timezone: 'Pacific/Auckland', label: '奥克兰' },
+            { name: 'Mumbai', flag: '🇮🇳', timezone: 'Asia/Kolkata', label: '孟买' },
+            { name: 'Bangkok', flag: '🇹🇭', timezone: 'Asia/Bangkok', label: '曼谷' },
+            { name: 'Hong Kong', flag: '🇭🇰', timezone: 'Asia/Hong_Kong', label: '香港' },
+        ];
 
-        // Try to detect subscription path from URL patterns
-        // Default subscription path
-        const subPath = 'sub';
-        const wsPath = '7bd180e8';
-
-        // Set WebSocket path
-        document.getElementById('ws-path').textContent = '/' + wsPath;
-
-        // Set subscription link
-        const subLink = protocol + '//' + host + '/' + subPath;
-        document.getElementById('sub-link').textContent = subLink;
-
-        // Copy button
-        document.getElementById('copy-btn').addEventListener('click', function(e) {
-            e.preventDefault();
-            navigator.clipboard.writeText(subLink).then(() => {
-                this.textContent = 'Copied!';
-                setTimeout(() => {
-                    this.textContent = 'Copy Subscription Link';
-                }, 2000);
+        function getTimeInZone(timezone) {
+            return new Date().toLocaleString('en-US', {
+                timeZone: timezone,
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
             });
+        }
+
+        function getDateInZone(timezone) {
+            return new Date().toLocaleString('zh-CN', {
+                timeZone: timezone,
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                weekday: 'long'
+            });
+        }
+
+        function isDayTime(timezone) {
+            const hour = parseInt(new Date().toLocaleString('en-US', {
+                timeZone: timezone,
+                hour: '2-digit',
+                hour12: false
+            }));
+            return hour >= 6 && hour < 18;
+        }
+
+        function createClockCard(city) {
+            const card = document.createElement('div');
+            card.className = 'clock-card';
+            card.dataset.timezone = city.timezone;
+
+            card.innerHTML = `
+                <div class="city-info">
+                    <span class="city-name">${city.label}</span>
+                    <span class="city-flag">${city.flag}</span>
+                </div>
+                <div class="timezone">UTC ${getUtcOffset(city.timezone)}</div>
+                <div class="time-display">--:--:--</div>
+                <div class="date-display">Loading...</div>
+                <span class="day-indicator day">☀️ Day</span>
+            `;
+
+            return card;
+        }
+
+        function getUtcOffset(timezone) {
+            const now = new Date();
+            const utc = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+            const local = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+            const diff = (local - utc) / (1000 * 60 * 60);
+            const sign = diff >= 0 ? '+' : '';
+            return sign + diff.toFixed(0).replace('.0', '');
+        }
+
+        function updateClocks() {
+            const cards = document.querySelectorAll('.clock-card');
+            cards.forEach(card => {
+                const timezone = card.dataset.timezone;
+                const timeDisplay = card.querySelector('.time-display');
+                const dateDisplay = card.querySelector('.date-display');
+                const dayIndicator = card.querySelector('.day-indicator');
+
+                timeDisplay.textContent = getTimeInZone(timezone);
+                dateDisplay.textContent = getDateInZone(timezone);
+
+                const isDay = isDayTime(timezone);
+                dayIndicator.className = `day-indicator ${isDay ? 'day' : 'night'}`;
+                dayIndicator.textContent = isDay ? '☀️ Day' : '🌙 Night';
+            });
+
+            // Update local time in header
+            const localTimeEl = document.getElementById('local-time');
+            localTimeEl.textContent = new Date().toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                weekday: 'long',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        // Initialize
+        const grid = document.getElementById('clock-grid');
+        cities.forEach(city => {
+            grid.appendChild(createClockCard(city));
         });
 
-        // Download button
-        document.getElementById('download-btn').addEventListener('click', function(e) {
-            e.preventDefault();
-            window.location.href = subLink;
-        });
+        // Start updates
+        updateClocks();
+        setInterval(updateClocks, 1000);
     </script>
 </body>
 </html>
