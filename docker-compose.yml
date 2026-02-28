@@ -1,0 +1,23 @@
+services:
+  rust-ws:
+    build: .
+    image: rust-ws:latest
+    container_name: rust-ws
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    environment:
+      - UUID=${UUID:-7bd180e8-1142-4387-93f5-03e8d750a896}
+      - PORT=${PORT:-3000}
+      - DOMAIN=${DOMAIN:-}
+      - SUB_PATH=${SUB_PATH:-sub}
+      - NAME=${NAME:-}
+      - WS_PATH=${WS_PATH:-7bd180e8}
+      - AUTO_ACCESS=${AUTO_ACCESS:-false}
+      - DEBUG=${DEBUG:-false}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${PORT:-3000}/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
