@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Proxy Server</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #eee;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2em;
+            background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            background: #00ff88;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .status-text {
+            color: #00ff88;
+            font-weight: 500;
+        }
+        .info-box {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .info-title {
+            font-size: 0.9em;
+            color: #888;
+            margin-bottom: 10px;
+        }
+        .info-content {
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.85em;
+            word-break: break-all;
+            color: #00d2ff;
+        }
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            margin-top: 20px;
+            background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-align: center;
+            text-decoration: none;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 210, 255, 0.3);
+        }
+        .features {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 30px;
+        }
+        .feature {
+            text-align: center;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+        }
+        .feature-icon {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        .feature-name {
+            font-size: 0.85em;
+            color: #aaa;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 0.8em;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WebSocket Proxy</h1>
+
+        <div class="status">
+            <div class="status-dot"></div>
+            <span class="status-text">Server Running</span>
+        </div>
+
+        <div class="info-box">
+            <div class="info-title">Supported Protocols</div>
+            <div class="info-content">VLESS | Trojan | Shadowsocks</div>
+        </div>
+
+        <div class="info-box">
+            <div class="info-title">WebSocket Path</div>
+            <div class="info-content" id="ws-path">Loading...</div>
+        </div>
+
+        <div class="info-box">
+            <div class="info-title">Subscription Link</div>
+            <div class="info-content" id="sub-link">Loading...</div>
+        </div>
+
+        <a href="#" class="btn" id="copy-btn">Copy Subscription Link</a>
+        <a href="#" class="btn" id="download-btn" style="background: linear-gradient(90deg, #3a7bd5, #00d2ff);">Download Subscription</a>
+
+        <div class="features">
+            <div class="feature">
+                <div class="feature-icon">🔒</div>
+                <div class="feature-name">Secure</div>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">⚡</div>
+                <div class="feature-name">Fast</div>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🦀</div>
+                <div class="feature-name">Rust</div>
+            </div>
+        </div>
+
+        <div class="footer">
+            Built with Rust + Axum + Tokio
+        </div>
+    </div>
+
+    <script>
+        // Get current host and port
+        const protocol = window.location.protocol;
+        const host = window.location.host;
+        const pathname = window.location.pathname;
+
+        // Try to detect subscription path from URL patterns
+        // Default subscription path
+        const subPath = 'sub';
+        const wsPath = '7bd180e8';
+
+        // Set WebSocket path
+        document.getElementById('ws-path').textContent = '/' + wsPath;
+
+        // Set subscription link
+        const subLink = protocol + '//' + host + '/' + subPath;
+        document.getElementById('sub-link').textContent = subLink;
+
+        // Copy button
+        document.getElementById('copy-btn').addEventListener('click', function(e) {
+            e.preventDefault();
+            navigator.clipboard.writeText(subLink).then(() => {
+                this.textContent = 'Copied!';
+                setTimeout(() => {
+                    this.textContent = 'Copy Subscription Link';
+                }, 2000);
+            });
+        });
+
+        // Download button
+        document.getElementById('download-btn').addEventListener('click', function(e) {
+            e.preventDefault();
+            window.location.href = subLink;
+        });
+    </script>
+</body>
+</html>
