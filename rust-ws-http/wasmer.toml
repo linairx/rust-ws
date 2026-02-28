@@ -1,0 +1,19 @@
+[package]
+name = "rust-ws-http"
+version = "0.1.0"
+description = "HTTP service for Wasmer Edge - Subscription generator for VPS proxy nodes"
+
+[dependencies]
+
+[[module]]
+name = "rust-ws-http"
+source = "target/wasm32-wasmer-wasi/release/rust-ws-http.wasm"
+abi = "wasi"
+
+[[command]]
+name = "rust-ws-http"
+module = "rust-ws-http"
+runner = "wasi-threading"
+
+[fs]
+"/static" = "static"

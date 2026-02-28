@@ -1,0 +1,17 @@
+kind: wasmer.io/App.v0
+name: rust-ws-http
+owner: your-username
+package: .
+debug: false
+
+env:
+  PORT: "3000"
+  SUB_PATH: "sub"
+  NODES: ""
+
+scaling:
+  mode: single_concurrency
+
+domains:
+  - name: rust-ws-http.wasmer.app
+    kind: wasmer.io/Domain

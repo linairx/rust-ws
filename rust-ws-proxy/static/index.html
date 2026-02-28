@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>World Clock</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+        .header h1 {
+            font-size: 3em;
+            background: linear-gradient(90deg, #f093fb, #f5576c);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+        .header .local-time {
+            font-size: 1.5em;
+            color: rgba(255,255,255,0.7);
+        }
+        .clock-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .clock-card {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .clock-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+        .clock-card.highlight {
+            background: rgba(102, 126, 234, 0.2);
+            border-color: rgba(102, 126, 234, 0.5);
+        }
+        .city-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .city-name {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #fff;
+        }
+        .city-flag {
+            font-size: 1.8em;
+        }
+        .timezone {
+            font-size: 0.85em;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 20px;
+        }
+        .time-display {
+            font-size: 2.8em;
+            font-weight: 700;
+            font-family: 'Monaco', 'Consolas', monospace;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .date-display {
+            font-size: 0.95em;
+            color: rgba(255,255,255,0.6);
+            margin-top: 10px;
+        }
+        .day-indicator {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75em;
+            font-weight: 600;
+            margin-top: 15px;
+        }
+        .day-indicator.day {
+            background: rgba(255, 200, 87, 0.2);
+            color: #ffc857;
+        }
+        .day-indicator.night {
+            background: rgba(102, 126, 234, 0.2);
+            color: #667eea;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 60px;
+            color: rgba(255,255,255,0.4);
+            font-size: 0.9em;
+        }
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        @media (max-width: 600px) {
+            .header h1 { font-size: 2em; }
+            .time-display { font-size: 2em; }
+            .clock-card { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>World Clock</h1>
+        <div class="local-time" id="local-time"></div>
+    </div>
+
+    <div class="clock-grid" id="clock-grid"></div>
+
+    <div class="footer">
+        Built with Rust + Axum | <a href="/sub">Subscription</a>
+    </div>
+
+    <script>
+        const cities = [
+            { name: 'Beijing', flag: '🇨🇳', timezone: 'Asia/Shanghai', label: '北京' },
+            { name: 'Tokyo', flag: '🇯🇵', timezone: 'Asia/Tokyo', label: '东京' },
+            { name: 'Seoul', flag: '🇰🇷', timezone: 'Asia/Seoul', label: '首尔' },
+            { name: 'Singapore', flag: '🇸🇬', timezone: 'Asia/Singapore', label: '新加坡' },
+            { name: 'Dubai', flag: '🇦🇪', timezone: 'Asia/Dubai', label: '迪拜' },
+            { name: 'Moscow', flag: '🇷🇺', timezone: 'Europe/Moscow', label: '莫斯科' },
+            { name: 'London', flag: '🇬🇧', timezone: 'Europe/London', label: '伦敦' },
+            { name: 'Paris', flag: '🇫🇷', timezone: 'Europe/Paris', label: '巴黎' },
+            { name: 'Berlin', flag: '🇩🇪', timezone: 'Europe/Berlin', label: '柏林' },
+            { name: 'New York', flag: '🇺🇸', timezone: 'America/New_York', label: '纽约' },
+            { name: 'Los Angeles', flag: '🇺🇸', timezone: 'America/Los_Angeles', label: '洛杉矶' },
+            { name: 'Chicago', flag: '🇺🇸', timezone: 'America/Chicago', label: '芝加哥' },
+            { name: 'Toronto', flag: '🇨🇦', timezone: 'America/Toronto', label: '多伦多' },
+            { name: 'São Paulo', flag: '🇧🇷', timezone: 'America/Sao_Paulo', label: '圣保罗' },
+            { name: 'Sydney', flag: '🇦🇺', timezone: 'Australia/Sydney', label: '悉尼' },
+            { name: 'Melbourne', flag: '🇦🇺', timezone: 'Australia/Melbourne', label: '墨尔本' },
+            { name: 'Auckland', flag: '🇳🇿', timezone: 'Pacific/Auckland', label: '奥克兰' },
+            { name: 'Mumbai', flag: '🇮🇳', timezone: 'Asia/Kolkata', label: '孟买' },
+            { name: 'Bangkok', flag: '🇹🇭', timezone: 'Asia/Bangkok', label: '曼谷' },
+            { name: 'Hong Kong', flag: '🇭🇰', timezone: 'Asia/Hong_Kong', label: '香港' },
+        ];
+
+        function getTimeInZone(timezone) {
+            return new Date().toLocaleString('en-US', {
+                timeZone: timezone,
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        function getDateInZone(timezone) {
+            return new Date().toLocaleString('zh-CN', {
+                timeZone: timezone,
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                weekday: 'long'
+            });
+        }
+
+        function isDayTime(timezone) {
+            const hour = parseInt(new Date().toLocaleString('en-US', {
+                timeZone: timezone,
+                hour: '2-digit',
+                hour12: false
+            }));
+            return hour >= 6 && hour < 18;
+        }
+
+        function createClockCard(city) {
+            const card = document.createElement('div');
+            card.className = 'clock-card';
+            card.dataset.timezone = city.timezone;
+
+            card.innerHTML = `
+                <div class="city-info">
+                    <span class="city-name">${city.label}</span>
+                    <span class="city-flag">${city.flag}</span>
+                </div>
+                <div class="timezone">UTC ${getUtcOffset(city.timezone)}</div>
+                <div class="time-display">--:--:--</div>
+                <div class="date-display">Loading...</div>
+                <span class="day-indicator day">☀️ Day</span>
+            `;
+
+            return card;
+        }
+
+        function getUtcOffset(timezone) {
+            const now = new Date();
+            const utc = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+            const local = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+            const diff = (local - utc) / (1000 * 60 * 60);
+            const sign = diff >= 0 ? '+' : '';
+            return sign + diff.toFixed(0).replace('.0', '');
+        }
+
+        function updateClocks() {
+            const cards = document.querySelectorAll('.clock-card');
+            cards.forEach(card => {
+                const timezone = card.dataset.timezone;
+                const timeDisplay = card.querySelector('.time-display');
+                const dateDisplay = card.querySelector('.date-display');
+                const dayIndicator = card.querySelector('.day-indicator');
+
+                timeDisplay.textContent = getTimeInZone(timezone);
+                dateDisplay.textContent = getDateInZone(timezone);
+
+                const isDay = isDayTime(timezone);
+                dayIndicator.className = `day-indicator ${isDay ? 'day' : 'night'}`;
+                dayIndicator.textContent = isDay ? '☀️ Day' : '🌙 Night';
+            });
+
+            // Update local time in header
+            const localTimeEl = document.getElementById('local-time');
+            localTimeEl.textContent = new Date().toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                weekday: 'long',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        // Initialize
+        const grid = document.getElementById('clock-grid');
+        cities.forEach(city => {
+            grid.appendChild(createClockCard(city));
+        });
+
+        // Start updates
+        updateClocks();
+        setInterval(updateClocks, 1000);
+    </script>
+</body>
+</html>

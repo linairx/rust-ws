@@ -1,0 +1,13 @@
+[package]
+name = "rust-ws-core"
+version = "0.1.0"
+edition = "2021"
+description = "Core library for WebSocket proxy protocols"
+
+[dependencies]
+base64 = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
