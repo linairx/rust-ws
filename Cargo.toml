@@ -1,5 +1,5 @@
 [workspace]
-members = ["rust-ws-core", "rust-ws-http", "rust-ws-proxy"]
+members = ["rust-ws-core", "rust-ws-proxy", "wasmer-test"]
 resolver = "2"
 
 [workspace.dependencies]

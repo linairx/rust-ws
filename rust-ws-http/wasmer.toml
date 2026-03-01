@@ -1,9 +1,0 @@
-[package]
-name = "rust-ws-http"
-version = "0.1.0"
-description = "HTTP subscription service for Wasmer Edge"
-
-[[command]]
-name = "rust-ws-http"
-module = "../target/wasm32-wasmer-wasi/release/rust-ws-http.wasm"
-runner = "wasi@unstable_"
