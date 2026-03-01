@@ -1,47 +1,52 @@
-//! rust-ws-http: HTTP service for Wasmer Edge
+//! rust-ws-http - WASIX stdin/stdout 模式
 //!
-//! This service provides:
-//! - Health check endpoint
-//! - Subscription page that generates proxy URLs for VPS nodes
+//! 通信协议:
+//!   stdin: JSON 请求
+//!   stdout: JSON 响应
+//!
+//! 请求格式:
+//!   {"cmd": "health"}
+//!   {"cmd": "sub", "server": "example.com", "port": 443, "password": "xxx", "method": "aes-256-gcm", "name": "Node"}
+//!
+//! 响应格式:
+//!   {"ok": true, "data": {...}}
+//!   {"ok": false, "error": "error message"}
 
-mod config;
-mod handlers;
+use std::io::{Read, Write};
 
-use std::net::SocketAddr;
+mod commands;
+mod types;
 
-use axum::{
-    routing::get,
-    Router,
-};
-use tracing::info;
+use types::{Request, Response};
 
-use crate::config::Config;
+fn main() {
+    // 1. 从 stdin 读取 JSON 请求
+    let mut input = String::new();
+    if let Err(e) = std::io::stdin().read_to_string(&mut input) {
+        let err_response = Response::error(format!("Failed to read stdin: {}", e));
+        let _ = write_response(&err_response);
+        return;
+    }
 
-#[tokio::main]
-async fn main() {
-    // Initialize logging
-    tracing_subscriber::fmt::init();
+    // 2. 解析请求
+    let request: Request = match serde_json::from_str(&input) {
+        Ok(r) => r,
+        Err(e) => {
+            let err_response = Response::error(format!("Invalid JSON: {}", e));
+            let _ = write_response(&err_response);
+            return;
+        }
+    };
 
-    // Load configuration from environment
-    let config = Config::from_env();
-    let port = config.port;
+    // 3. 处理命令
+    let response = commands::handle(request);
 
-    info!("Starting HTTP service on port {}", port);
-    info!("Subscription path: /{}", config.sub_path);
+    // 4. 输出响应
+    let _ = write_response(&response);
+}
 
-    // Build router
-    let app = Router::new()
-        .route("/health", get(handlers::health))
-        .route("/", get(handlers::index))
-        .route(&format!("/{}", config.sub_path), get(handlers::subscription))
-        .with_state(config);
-
-    // Bind address - use 0.0.0.0 for Wasmer Edge compatibility
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    let listener = tokio::net::TcpListener::bind(addr).await.expect("Failed to bind");
-
-    info!("Server listening on {}", addr);
-
-    // Start server using axum 0.8 API
-    axum::serve(listener, app).await.expect("Server failed");
+fn write_response(response: &Response) -> std::io::Result<()> {
+    let json = serde_json::to_string(response)?;
+    std::io::stdout().write_all(json.as_bytes())?;
+    std::io::stdout().flush()
 }

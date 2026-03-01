@@ -2,9 +2,4 @@ name: rust-ws-http
 app_id: da_K1EIZtMUxVl9
 owner: s617218165
 package: .
-env:
-  PORT: '3000'
-  SUB_PATH: sub
-  NODES: ''
-debug: false
 kind: wasmer.io/App.v0
