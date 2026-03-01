@@ -2,28 +2,21 @@
  * rust-ws-http Web Interface
  *
  * 使用 @wasmer/sdk 运行 WASIX 模块
- * 通信模式: stdin/stdout
  */
 
 import { init, runWasix } from "@wasmer/sdk";
-// WASM 文件路径 (在 workspace 根目录的 target 中)
 import wasmUrl from "../../target/wasm32-wasip1/release/rust-ws-http.wasm?url";
 
 // 请求类型
-interface HealthRequest {
-  cmd: "health";
-}
-
-interface SubRequest {
-  cmd: "sub";
-  server?: string;
+interface Request {
+  cmd: string;
+  uuid?: string;
+  host?: string;
   port?: number;
-  password?: string;
-  method?: string;
   name?: string;
+  ws_path?: string;
+  url?: string;
 }
-
-type Request = HealthRequest | SubRequest;
 
 // 响应类型
 interface Response {
@@ -54,10 +47,8 @@ async function initialize(): Promise<WebAssembly.Module> {
 async function callWasm<T extends Request>(request: T): Promise<Response> {
   const module = await initialize();
 
-  // 运行 WASIX 实例
   const instance = await runWasix(module, {});
 
-  // 写入 stdin
   const stdin = instance.stdin.getWriter();
   const encoder = new TextEncoder();
   const requestJson = JSON.stringify(request);
@@ -65,7 +56,6 @@ async function callWasm<T extends Request>(request: T): Promise<Response> {
   await stdin.write(encoder.encode(requestJson));
   await stdin.close();
 
-  // 等待执行完成
   const result = await instance.wait();
 
   if (!result.ok) {
@@ -75,7 +65,6 @@ async function callWasm<T extends Request>(request: T): Promise<Response> {
     };
   }
 
-  // 解析 stdout
   const stdout = result.stdout;
   if (!stdout) {
     return {
@@ -104,66 +93,193 @@ export async function health(): Promise<Response> {
 }
 
 /**
- * 生成订阅链接
+ * 显示帮助
  */
-export async function generateSub(options: {
-  server: string;
+export async function help(): Promise<Response> {
+  return callWasm({ cmd: "help" });
+}
+
+/**
+ * 生成订阅内容
+ */
+export async function generateSubscription(options: {
+  uuid: string;
+  host: string;
   port: number;
-  password: string;
-  method?: string;
   name?: string;
+  ws_path?: string;
 }): Promise<Response> {
   return callWasm({
     cmd: "sub",
-    server: options.server,
+    uuid: options.uuid,
+    host: options.host,
     port: options.port,
-    password: options.password,
-    method: options.method,
     name: options.name,
+    ws_path: options.ws_path,
+  });
+}
+
+/**
+ * 生成各协议链接
+ */
+export async function generateUrls(options: {
+  uuid: string;
+  host: string;
+  port: number;
+  name?: string;
+  ws_path?: string;
+}): Promise<Response> {
+  return callWasm({
+    cmd: "urls",
+    uuid: options.uuid,
+    host: options.host,
+    port: options.port,
+    name: options.name,
+    ws_path: options.ws_path,
+  });
+}
+
+/**
+ * 解析代理链接
+ */
+export async function parseUrl(url: string): Promise<Response> {
+  return callWasm({
+    cmd: "parse",
+    url,
   });
 }
 
 // ============ UI 逻辑 ============
 
+function $(id: string): HTMLElement {
+  return document.getElementById(id)!;
+}
+
+function showOutput(data: unknown) {
+  const output = $("output");
+  if (typeof data === "string") {
+    output.textContent = data;
+  } else {
+    output.textContent = JSON.stringify(data, null, 2);
+  }
+}
+
+function getInputValue(id: string): string {
+  return ($(id) as HTMLInputElement).value.trim();
+}
+
+function getInputNumber(id: string): number {
+  return parseInt(getInputValue(id)) || 0;
+}
+
 async function main() {
-  const output = document.getElementById("output") as HTMLPreElement;
-  const healthBtn = document.getElementById("health-btn") as HTMLButtonElement;
-  const subBtn = document.getElementById("sub-btn") as HTMLButtonElement;
-  const serverInput = document.getElementById("server") as HTMLInputElement;
-  const portInput = document.getElementById("port") as HTMLInputElement;
-  const passwordInput = document.getElementById("password") as HTMLInputElement;
-  const methodInput = document.getElementById("method") as HTMLInputElement;
-  const nameInput = document.getElementById("name") as HTMLInputElement;
+  const output = $("output");
+  const statusText = $("status-text");
 
   // 初始化
   output.textContent = "Initializing Wasmer SDK...";
+  statusText.textContent = "Loading...";
+  statusText.className = "status-loading";
 
   try {
     await initialize();
-    output.textContent = "Ready! Click buttons to test.";
+    statusText.textContent = "Ready";
+    statusText.className = "status-ready";
+    output.textContent = "Ready! Use the tabs above to access different features.";
   } catch (e) {
+    statusText.textContent = "Error";
+    statusText.className = "status-error";
     output.textContent = `Init failed: ${e}`;
     return;
   }
 
-  // 健康检查
-  healthBtn.addEventListener("click", async () => {
-    output.textContent = "Calling health...";
-    const result = await health();
-    output.textContent = JSON.stringify(result, null, 2);
+  // Tab switching
+  const tabs = document.querySelectorAll(".tab-btn");
+  const panels = document.querySelectorAll(".panel");
+
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      tabs.forEach((t) => t.classList.remove("active"));
+      panels.forEach((p) => p.classList.remove("active"));
+      tab.classList.add("active");
+      const panelId = tab.getAttribute("data-panel");
+      $(panelId!).classList.add("active");
+    });
   });
 
-  // 生成订阅
-  subBtn.addEventListener("click", async () => {
-    const server = serverInput.value || "example.com";
-    const port = parseInt(portInput.value) || 443;
-    const password = passwordInput.value || "password";
-    const method = methodInput.value || "aes-256-gcm";
-    const name = nameInput.value || "Proxy Node";
+  // Help button
+  $("help-btn")?.addEventListener("click", async () => {
+    const result = await help();
+    showOutput(result);
+  });
 
-    output.textContent = "Generating subscription...";
-    const result = await generateSub({ server, port, password, method, name });
-    output.textContent = JSON.stringify(result, null, 2);
+  // Health button
+  $("health-btn")?.addEventListener("click", async () => {
+    const result = await health();
+    showOutput(result);
+  });
+
+  // Generate URLs button
+  $("urls-btn")?.addEventListener("click", async () => {
+    const uuid = getInputValue("uuid");
+    const host = getInputValue("host");
+    const port = getInputNumber("port");
+    const name = getInputValue("name") || "Proxy Node";
+    const wsPath = getInputValue("ws-path");
+
+    if (!uuid || !host || !port) {
+      showOutput({ error: "Please fill in UUID, Host, and Port" });
+      return;
+    }
+
+    const result = await generateUrls({ uuid, host, port, name, ws_path: wsPath });
+    showOutput(result);
+  });
+
+  // Generate Subscription button
+  $("sub-btn")?.addEventListener("click", async () => {
+    const uuid = getInputValue("uuid");
+    const host = getInputValue("host");
+    const port = getInputNumber("port");
+    const name = getInputValue("name") || "Proxy Node";
+    const wsPath = getInputValue("ws-path");
+
+    if (!uuid || !host || !port) {
+      showOutput({ error: "Please fill in UUID, Host, and Port" });
+      return;
+    }
+
+    const result = await generateSubscription({ uuid, host, port, name, ws_path: wsPath });
+    showOutput(result);
+  });
+
+  // Parse URL button
+  $("parse-btn")?.addEventListener("click", async () => {
+    const url = getInputValue("parse-url");
+
+    if (!url) {
+      showOutput({ error: "Please enter a proxy URL" });
+      return;
+    }
+
+    const result = await parseUrl(url);
+    showOutput(result);
+  });
+
+  // Copy subscription button
+  $("copy-btn")?.addEventListener("click", async () => {
+    const output = $("output").textContent || "";
+    try {
+      await navigator.clipboard.writeText(output);
+      const btn = $("copy-btn") as HTMLButtonElement;
+      const originalText = btn.textContent;
+      btn.textContent = "Copied!";
+      setTimeout(() => {
+        btn.textContent = originalText;
+      }, 1500);
+    } catch (e) {
+      showOutput({ error: "Failed to copy to clipboard" });
+    }
   });
 }
 

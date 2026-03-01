@@ -4,12 +4,20 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize)]
 pub struct Request {
     pub cmd: String,
-    // sub 命令参数
-    pub server: Option<String>,
+
+    // === sub 命令参数 ===
+    pub uuid: Option<String>,
+    pub host: Option<String>,
     pub port: Option<u16>,
-    pub password: Option<String>,
-    pub method: Option<String>,
     pub name: Option<String>,
+    pub ws_path: Option<String>,
+
+    // === parse 命令参数 ===
+    pub url: Option<String>,
+
+    // === config 命令参数 ===
+    pub protocol: Option<String>,
+    pub format: Option<String>,
 }
 
 /// 响应结构
@@ -31,11 +39,23 @@ impl Response {
         }
     }
 
-    pub fn error(msg: String) -> Self {
+    pub fn error(msg: impl Into<String>) -> Self {
         Response {
             ok: false,
             data: None,
-            error: Some(msg),
+            error: Some(msg.into()),
         }
     }
+}
+
+/// 解析后的节点信息
+#[derive(Debug, Serialize)]
+pub struct ParsedNode {
+    pub protocol: String,
+    pub host: String,
+    pub port: u16,
+    pub uuid: Option<String>,
+    pub password: Option<String>,
+    pub name: String,
+    pub raw: String,
 }

@@ -2,9 +2,13 @@
 name = "rust-ws-http"
 version = "0.1.0"
 edition = "2021"
+description = "WebSocket proxy toolkit (WASM compatible)"
 
 [dependencies]
-base64 = "0.22"
-percent-encoding = "2.3"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+# Workspace dependencies
+base64 = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Local dependencies
+rust-ws-core = { path = "../rust-ws-core" }

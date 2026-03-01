@@ -1110,7 +1110,7 @@ name = "rust-ws-http"
 version = "0.1.0"
 dependencies = [
  "base64",
- "percent-encoding",
+ "rust-ws-core",
  "serde",
  "serde_json",
 ]
