@@ -28,7 +28,7 @@ RUN cargo build -p rust-ws-proxy --release
 # Runtime stage
 FROM alpine:3.21
 
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata wget
 
 WORKDIR /app
 
