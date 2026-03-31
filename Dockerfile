@@ -5,20 +5,8 @@ RUN apk add --no-cache musl-dev
 
 WORKDIR /app
 
-# Copy workspace manifests
+# Copy workspace files
 COPY Cargo.toml Cargo.lock ./
-COPY rust-ws-core/Cargo.toml rust-ws-core/Cargo.toml
-COPY rust-ws-proxy/Cargo.toml rust-ws-proxy/Cargo.toml
-
-# Create dummy source files to build dependencies first (cache-friendly)
-RUN mkdir -p rust-ws-core/src rust-ws-proxy/src \
-    && echo "pub fn placeholder() {}" > rust-ws-core/src/lib.rs \
-    && echo "fn main() {}" > rust-ws-proxy/src/main.rs
-
-# Build dependencies (this layer will be cached)
-RUN cargo build -p rust-ws-proxy --release && rm -rf rust-ws-core/src rust-ws-proxy/src
-
-# Copy full crate source (includes `static/` needed by include_str!)
 COPY rust-ws-core rust-ws-core
 COPY rust-ws-proxy rust-ws-proxy
 
