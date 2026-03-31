@@ -18,9 +18,9 @@ RUN mkdir -p rust-ws-core/src rust-ws-proxy/src \
 # Build dependencies (this layer will be cached)
 RUN cargo build -p rust-ws-proxy --release && rm -rf rust-ws-core/src rust-ws-proxy/src
 
-# Copy source code
-COPY rust-ws-core/src rust-ws-core/src
-COPY rust-ws-proxy/src rust-ws-proxy/src
+# Copy full crate source (includes `static/` needed by include_str!)
+COPY rust-ws-core rust-ws-core
+COPY rust-ws-proxy rust-ws-proxy
 
 # Build the application binary
 RUN cargo build -p rust-ws-proxy --release
