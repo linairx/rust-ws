@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use axum::{
     extract::{
-        ws::{Message, WebSocket, WebSocketUpgrade},
         State,
+        ws::{Message, WebSocket, WebSocketUpgrade},
     },
     response::Response,
 };
@@ -47,9 +47,10 @@ pub fn detect_protocol(data: &[u8]) -> Protocol {
         // Trojan: starts with SHA224 hash (56 hex chars)
         let is_hex = data[0..56].iter().all(|&b| b.is_ascii_hexdigit());
         if is_hex && data.len() > 58 && data[56] == 0x0D && data[57] == 0x0A {
-            return Protocol::Trojan;
+            Protocol::Trojan
+        } else {
+            Protocol::Unknown
         }
-        Protocol::Trojan
     } else if data.len() > 0 && matches!(data[0], 1 | 3 | 4) {
         Protocol::Shadowsocks
     } else {
@@ -57,19 +58,48 @@ pub fn detect_protocol(data: &[u8]) -> Protocol {
     }
 }
 
+fn parse_target(data: &[u8], hint: Protocol) -> Option<(Protocol, String, u16)> {
+    let orders: &[Protocol] = match hint {
+        Protocol::Vless => &[Protocol::Vless, Protocol::Trojan, Protocol::Shadowsocks],
+        Protocol::Trojan => &[Protocol::Trojan, Protocol::Vless, Protocol::Shadowsocks],
+        Protocol::Shadowsocks => &[Protocol::Shadowsocks, Protocol::Vless, Protocol::Trojan],
+        Protocol::Unknown => &[Protocol::Vless, Protocol::Trojan, Protocol::Shadowsocks],
+    };
+
+    for p in orders {
+        match p {
+            Protocol::Vless => {
+                if let Ok(req) = parse_vless(data) {
+                    return Some((Protocol::Vless, req.host, req.port));
+                }
+            }
+            Protocol::Trojan => {
+                if let Ok(req) = parse_trojan(data) {
+                    return Some((Protocol::Trojan, req.host, req.port));
+                }
+            }
+            Protocol::Shadowsocks => {
+                if let Ok(req) = parse_shadowsocks(data) {
+                    return Some((Protocol::Shadowsocks, req.host, req.port));
+                }
+            }
+            Protocol::Unknown => {}
+        }
+    }
+
+    None
+}
+
 /// Check if domain is blocked
 pub fn is_blocked_domain(host: &str) -> bool {
     let host_lower = host.to_lowercase();
-    BLOCKED_DOMAINS.iter().any(|d| {
-        host_lower == *d || host_lower.ends_with(&format!(".{}", d))
-    })
+    BLOCKED_DOMAINS
+        .iter()
+        .any(|d| host_lower == *d || host_lower.ends_with(&format!(".{}", d)))
 }
 
 /// Handle WebSocket upgrade request
-pub async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<Arc<AppState>>,
-) -> Response {
+pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
     ws.on_upgrade(move |socket| handle_websocket(socket, state))
 }
 
@@ -101,34 +131,13 @@ async fn handle_websocket(socket: WebSocket, _state: Arc<AppState>) {
     }
 
     // Detect protocol
-    let protocol = detect_protocol(&data);
-    debug!("Detected protocol: {:?}", protocol);
+    let hint = detect_protocol(&data);
+    debug!("Detected protocol hint: {:?}", hint);
 
-    // Parse request based on protocol
-    let (host, port) = match protocol {
-        Protocol::Vless => match parse_vless(&data) {
-            Ok(req) => (req.host, req.port),
-            Err(e) => {
-                error!("Failed to parse VLESS: {}", e);
-                return;
-            }
-        },
-        Protocol::Trojan => match parse_trojan(&data) {
-            Ok(req) => (req.host, req.port),
-            Err(e) => {
-                error!("Failed to parse Trojan: {}", e);
-                return;
-            }
-        },
-        Protocol::Shadowsocks => match parse_shadowsocks(&data) {
-            Ok(req) => (req.host, req.port),
-            Err(e) => {
-                error!("Failed to parse Shadowsocks: {}", e);
-                return;
-            }
-        },
-        Protocol::Unknown => {
-            error!("Unknown protocol");
+    let (protocol, host, port) = match parse_target(&data, hint) {
+        Some(parsed) => parsed,
+        None => {
+            debug!("Unable to parse first packet as VLESS/Trojan/Shadowsocks");
             return;
         }
     };

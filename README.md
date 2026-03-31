@@ -133,6 +133,19 @@ export PORT=3000
 - [Tower](https://github.com/tower-rs/tower) - 中间件
 - [Reqwest](https://github.com/seanmonstar/reqwest) - HTTP 客户端
 
+## GitHub 自动构建镜像（GHCR）
+
+项目已提供 GitHub Actions 工作流：`.github/workflows/docker-image.yml`。
+
+- 触发条件：
+  - push 到 `main`
+  - push `v*` 标签（例如 `v1.0.0`）
+  - 手动触发（workflow_dispatch）
+- 推送地址：`ghcr.io/<你的 GitHub 用户名或组织>/rust-ws-proxy`
+- 支持架构：`linux/amd64`、`linux/arm64`
+
+使用时请确保仓库 **Settings → Actions → General** 允许工作流读取并写入 packages（`GITHUB_TOKEN` 权限）。
+
 ## 许可证
 
 MIT License
