@@ -4,7 +4,7 @@
 
 ## 项目架构
 
-本项目采用 **Rust Workspace** 架构，分为三个独立的 crate：
+本项目采用 **Rust Workspace** 架构，分为两个独立的 crate：
 
 ```
 rust-ws/
@@ -19,15 +19,6 @@ rust-ws/
 │   │       ├── trojan.rs
 │   │       └── shadowsocks.rs
 │   └── Cargo.toml
-├── rust-ws-http/          # Wasmer Edge HTTP 服务
-│   ├── src/
-│   │   ├── main.rs        # 入口
-│   │   ├── config.rs      # 配置
-│   │   └── handlers.rs    # HTTP 处理
-│   ├── static/
-│   ├── wasmer.toml        # Wasmer 配置
-│   ├── app.yaml           # Edge 配置
-│   └── Cargo.toml         # 独立项目（WASIX 兼容）
 └── rust-ws-proxy/         # VPS WebSocket 代理服务
     ├── src/
     │   ├── main.rs        # 入口
@@ -45,7 +36,6 @@ rust-ws/
 - 🌐 **WebSocket 传输**: 基于 WebSocket 的代理传输
 - 📡 **订阅生成**: 自动生成客户端订阅链接
 - 🚀 **高性能**: 基于 Tokio 异步运行时
-- ☁️ **Wasmer Edge 支持**: HTTP 服务可部署到边缘计算平台
 - 🐳 **Docker 支持**: 开箱即用的容器化部署
 
 ## 快速开始
@@ -59,13 +49,6 @@ cargo build -p rust-ws-core --release
 # 构建 VPS 代理服务
 cargo build -p rust-ws-proxy --release
 
-# 构建 HTTP 服务（独立项目）
-cd rust-ws-http && cargo build --release
-```
-
-### 运行 VPS 代理服务
-
-```bash
 # 设置环境变量
 export UUID=your-uuid-here
 export DOMAIN=example.com
@@ -73,19 +56,6 @@ export PORT=3000
 
 # 运行
 ./target/release/rust-ws-proxy
-```
-
-### 部署 HTTP 服务到 Wasmer Edge
-
-```bash
-cd rust-ws-http
-
-# 切换到 WASIX 依赖（取消注释 Cargo.toml 中的 WASIX 配置）
-# 然后构建
-cargo wasix build --release
-
-# 部署
-wasmer deploy
 ```
 
 ## 环境变量配置
@@ -103,14 +73,6 @@ wasmer deploy
 | `AUTO_ACCESS` | `false` | 自动保活 |
 | `DEBUG` | `false` | 调试模式 |
 
-### rust-ws-http (Wasmer Edge)
-
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `PORT` | `3000` | 服务监听端口 |
-| `SUB_PATH` | `sub` | 订阅路径 |
-| `NODES` | (空) | VPS 节点配置，格式: `UUID:DOMAIN:PORT:NAME:WS_PATH,...` |
-
 ## API 端点
 
 ### rust-ws-proxy
@@ -121,14 +83,6 @@ wasmer deploy
 | `/health` | GET | 健康检查 |
 | `/{sub_path}` | GET | 订阅链接（Base64 编码） |
 | `/{ws_path}` | WS | WebSocket 代理入口 |
-
-### rust-ws-http
-
-| 端点 | 方法 | 说明 |
-|------|------|------|
-| `/` | GET | 首页 |
-| `/health` | GET | 健康检查 |
-| `/{sub_path}` | GET | 多节点订阅链接 |
 
 ## 协议支持
 
