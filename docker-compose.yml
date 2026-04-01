@@ -1,8 +1,8 @@
 services:
-  rust-ws:
+  rust-ws-proxy:
     build: .
-    image: rust-ws:latest
-    container_name: rust-ws
+    image: rust-ws-proxy:latest
+    container_name: rust-ws-proxy
     restart: unless-stopped
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
@@ -15,6 +15,7 @@ services:
       - WS_PATH=${WS_PATH:-7bd180e8}
       - AUTO_ACCESS=${AUTO_ACCESS:-false}
       - DEBUG=${DEBUG:-false}
+      - ALLOW_SHADOWSOCKS=${ALLOW_SHADOWSOCKS:-false}
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${PORT:-3000}/health"]
       interval: 30s
