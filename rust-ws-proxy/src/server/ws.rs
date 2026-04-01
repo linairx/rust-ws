@@ -63,6 +63,7 @@ fn parse_target(
     hint: Protocol,
     expected_uuid: Option<&[u8; 16]>,
     expected_trojan_hash: Option<&str>,
+    allow_shadowsocks: bool,
 ) -> Option<(Protocol, String, u16)> {
     let orders: &[Protocol] = match hint {
         Protocol::Vless => &[Protocol::Vless, Protocol::Trojan, Protocol::Shadowsocks],
@@ -94,6 +95,9 @@ fn parse_target(
                 }
             }
             Protocol::Shadowsocks => {
+                if !allow_shadowsocks {
+                    continue;
+                }
                 if let Ok(req) = parse_shadowsocks(data) {
                     return Some((Protocol::Shadowsocks, req.host, req.port));
                 }
@@ -133,9 +137,8 @@ async fn handle_websocket(socket: WebSocket, state: Arc<AppState>) {
 
     let data: axum::body::Bytes = match first_msg {
         Message::Binary(data) => data,
-        Message::Text(text) => text.as_bytes().to_vec().into(),
         _ => {
-            warn!("First message is not binary or text");
+            debug!("First message is not binary, dropping");
             return;
         }
     };
@@ -157,6 +160,7 @@ async fn handle_websocket(socket: WebSocket, state: Arc<AppState>) {
         hint,
         expected_uuid.as_ref(),
         Some(expected_trojan_hash.as_str()),
+        state.config.allow_shadowsocks,
     ) {
         Some(parsed) => parsed,
         None => {

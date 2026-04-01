@@ -72,6 +72,7 @@ export PORT=3000
 | `WS_PATH` | `7bd180e8` | WebSocket 路径 |
 | `AUTO_ACCESS` | `false` | 自动保活 |
 | `DEBUG` | `false` | 调试模式 |
+| `ALLOW_SHADOWSOCKS` | `false` | 是否允许 Shadowsocks 首包解析（公网建议关闭） |
 
 ## API 端点
 
