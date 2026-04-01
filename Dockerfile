@@ -1,37 +1,34 @@
+# syntax=docker/dockerfile:1.7
+
 # Build stage
-FROM rust:1.93-alpine AS builder
+FROM rust:1.94-alpine AS builder
 
 RUN apk add --no-cache musl-dev
 
 WORKDIR /app
 
-# Copy manifests
+# Copy workspace files
 COPY Cargo.toml Cargo.lock ./
+COPY rust-ws-core rust-ws-core
+COPY rust-ws-proxy rust-ws-proxy
 
-# Create dummy main.rs to build dependencies
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-
-# Build dependencies (this layer will be cached)
-RUN cargo build --release && rm -rf src
-
-# Copy source code
-COPY src ./src
-
-# Build the application
-RUN touch src/main.rs && cargo build --release
+# Build the application binary
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git/db \
+    cargo build -p rust-ws-proxy --release
 
 # Runtime stage
 FROM alpine:3.21
 
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata wget
 
 WORKDIR /app
 
 # Copy the binary
-COPY --from=builder /app/target/release/rust-ws /app/rust-ws
+COPY --from=builder /app/target/release/rust-ws-proxy /app/rust-ws-proxy
 
 # Copy static files
-COPY static ./static
+COPY rust-ws-proxy/static ./static
 
 # Create non-root user
 RUN addgroup -g 1000 app && \
@@ -49,10 +46,11 @@ ENV DOMAIN=""
 ENV NAME=""
 ENV AUTO_ACCESS=false
 ENV DEBUG=false
+ENV ALLOW_SHADOWSOCKS=false
 
 EXPOSE ${PORT}
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT}/health || exit 1
 
-CMD ["./rust-ws"]
+CMD ["./rust-ws-proxy"]

@@ -11,13 +11,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::{
-    routing::{any, get},
     Router,
+    routing::{any, get},
 };
 use reqwest::Client;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
-use tracing::{info, error};
+use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
 use crate::config::Config;
@@ -31,7 +31,14 @@ pub struct AppState {
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() {
+    if let Err(e) = run().await {
+        eprintln!("[fatal] rust-ws-proxy exited with error: {e:#}");
+        std::process::exit(1);
+    }
+}
+
+async fn run() -> anyhow::Result<()> {
     // Load .env file
     dotenvy::dotenv().ok();
 
@@ -46,8 +53,7 @@ async fn main() -> anyhow::Result<()> {
     let log_level = if config.debug { "debug" } else { "info" };
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new(log_level))
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level)),
         )
         .init();
 
@@ -56,9 +62,7 @@ async fn main() -> anyhow::Result<()> {
     info!("Subscription path: /{}", sub_path);
 
     // Create HTTP client
-    let client = Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()?;
+    let client = Client::builder().timeout(Duration::from_secs(30)).build()?;
 
     // Create shared state
     let state = Arc::new(AppState {
@@ -83,7 +87,7 @@ async fn main() -> anyhow::Result<()> {
             CorsLayer::new()
                 .allow_origin(Any)
                 .allow_methods(Any)
-                .allow_headers(Any)
+                .allow_headers(Any),
         );
 
     // Bind address
