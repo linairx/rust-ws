@@ -14,7 +14,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::{debug, error, info, warn};
 
-use rust_ws_core::{parse_shadowsocks, parse_trojan, parse_vless};
+use rust_ws_core::{parse_shadowsocks, parse_trojan, parse_vless, sha224_hash};
 
 use crate::AppState;
 
@@ -58,7 +58,12 @@ pub fn detect_protocol(data: &[u8]) -> Protocol {
     }
 }
 
-fn parse_target(data: &[u8], hint: Protocol) -> Option<(Protocol, String, u16)> {
+fn parse_target(
+    data: &[u8],
+    hint: Protocol,
+    expected_uuid: Option<&[u8; 16]>,
+    expected_trojan_hash: Option<&str>,
+) -> Option<(Protocol, String, u16)> {
     let orders: &[Protocol] = match hint {
         Protocol::Vless => &[Protocol::Vless, Protocol::Trojan, Protocol::Shadowsocks],
         Protocol::Trojan => &[Protocol::Trojan, Protocol::Vless, Protocol::Shadowsocks],
@@ -70,11 +75,21 @@ fn parse_target(data: &[u8], hint: Protocol) -> Option<(Protocol, String, u16)> 
         match p {
             Protocol::Vless => {
                 if let Ok(req) = parse_vless(data) {
+                    if let Some(uuid) = expected_uuid {
+                        if &req.uuid != uuid {
+                            continue;
+                        }
+                    }
                     return Some((Protocol::Vless, req.host, req.port));
                 }
             }
             Protocol::Trojan => {
                 if let Ok(req) = parse_trojan(data) {
+                    if let Some(password_hash) = expected_trojan_hash {
+                        if req.password_hash != password_hash {
+                            continue;
+                        }
+                    }
                     return Some((Protocol::Trojan, req.host, req.port));
                 }
             }
@@ -104,7 +119,7 @@ pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>
 }
 
 /// Main WebSocket handler
-async fn handle_websocket(socket: WebSocket, _state: Arc<AppState>) {
+async fn handle_websocket(socket: WebSocket, state: Arc<AppState>) {
     let (mut ws_tx, mut ws_rx) = socket.split();
 
     // Wait for first message to determine protocol
@@ -134,10 +149,18 @@ async fn handle_websocket(socket: WebSocket, _state: Arc<AppState>) {
     let hint = detect_protocol(&data);
     debug!("Detected protocol hint: {:?}", hint);
 
-    let (protocol, host, port) = match parse_target(&data, hint) {
+    let expected_uuid = parse_uuid_bytes(&state.config.uuid);
+    let expected_trojan_hash = sha224_hash(&state.config.uuid);
+
+    let (protocol, host, port) = match parse_target(
+        &data,
+        hint,
+        expected_uuid.as_ref(),
+        Some(expected_trojan_hash.as_str()),
+    ) {
         Some(parsed) => parsed,
         None => {
-            debug!("Unable to parse first packet as VLESS/Trojan/Shadowsocks");
+            debug!("Unable to parse first packet as authorized VLESS/Trojan/Shadowsocks");
             return;
         }
     };
@@ -223,6 +246,22 @@ async fn handle_websocket(socket: WebSocket, _state: Arc<AppState>) {
     }
 
     info!("Connection closed: {}:{}", host, port);
+}
+
+fn parse_uuid_bytes(uuid: &str) -> Option<[u8; 16]> {
+    let hex = uuid.replace('-', "");
+    if hex.len() != 32 {
+        return None;
+    }
+
+    let mut out = [0u8; 16];
+    for (i, byte) in out.iter_mut().enumerate() {
+        let idx = i * 2;
+        let chunk = &hex[idx..idx + 2];
+        let value = u8::from_str_radix(chunk, 16).ok()?;
+        *byte = value;
+    }
+    Some(out)
 }
 
 /// Get the offset where payload starts in the first packet
