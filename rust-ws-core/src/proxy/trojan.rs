@@ -4,6 +4,7 @@ use crate::error::{ProxyError, Result};
 pub const ATYPE_IPV4: u8 = 0x01;
 pub const ATYPE_DOMAIN: u8 = 0x03;
 pub const ATYPE_IPV6: u8 = 0x04;
+pub const CMD_CONNECT: u8 = 0x01;
 
 /// Parsed Trojan request
 #[derive(Debug, Clone)]
@@ -34,11 +35,19 @@ pub fn parse_trojan(data: &[u8]) -> Result<TrojanRequest> {
 
     // Check CRLF after password
     if data[56] != 0x0D || data[57] != 0x0A {
-        return Err(ProxyError::Parse("Invalid Trojan format: missing CRLF after password".to_string()));
+        return Err(ProxyError::Parse(
+            "Invalid Trojan format: missing CRLF after password".to_string(),
+        ));
     }
 
     // Command (byte 58)
     let command = data[58];
+    if command != CMD_CONNECT {
+        return Err(ProxyError::Parse(format!(
+            "Unknown Trojan command: {}",
+            command
+        )));
+    }
 
     // Address type (byte 59)
     let address_type = data[59];
@@ -69,7 +78,8 @@ pub fn parse_trojan(data: &[u8]) -> Result<TrojanRequest> {
             if data.len() < domain_offset + domain_len {
                 return Err(ProxyError::Parse("Trojan packet incomplete".to_string()));
             }
-            let host = String::from_utf8_lossy(&data[domain_offset..domain_offset + domain_len]).to_string();
+            let host = String::from_utf8_lossy(&data[domain_offset..domain_offset + domain_len])
+                .to_string();
             (host, domain_offset + domain_len)
         }
         ATYPE_IPV6 => {
@@ -87,7 +97,12 @@ pub fn parse_trojan(data: &[u8]) -> Result<TrojanRequest> {
             }
             (parts.join(":"), addr_offset + 16)
         }
-        _ => return Err(ProxyError::Parse(format!("Unknown address type: {}", address_type))),
+        _ => {
+            return Err(ProxyError::Parse(format!(
+                "Unknown address type: {}",
+                address_type
+            )));
+        }
     };
 
     // Parse port

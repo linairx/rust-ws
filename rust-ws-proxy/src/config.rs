@@ -20,6 +20,8 @@ pub struct Config {
     pub auto_access: bool,
     #[serde(default)]
     pub debug: bool,
+    #[serde(default)]
+    pub allow_shadowsocks: bool,
 }
 
 fn default_uuid() -> String {
