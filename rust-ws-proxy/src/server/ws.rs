@@ -178,6 +178,18 @@ async fn handle_websocket(socket: WebSocket, state: Arc<AppState>) {
 
     info!("Proxying to {}:{}", host, port);
 
+    // VLESS requires response header
+    if matches!(protocol, Protocol::Vless) {
+        if ws_tx
+            .send(Message::Binary(vec![0x00, 0x00].into()))
+            .await
+            .is_err()
+        {
+            debug!("Failed to send VLESS response header");
+            return;
+        }
+    }
+
     // Connect to target
     let target_addr = format!("{}:{}", host, port);
     let mut target_stream = match connect_target(&host, port).await {
