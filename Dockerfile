@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 # Build stage
 FROM rust:1.94-alpine AS builder
 
@@ -11,7 +13,9 @@ COPY rust-ws-core rust-ws-core
 COPY rust-ws-proxy rust-ws-proxy
 
 # Build the application binary
-RUN cargo build -p rust-ws-proxy --release
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git/db \
+    cargo build -p rust-ws-proxy --release
 
 # Runtime stage
 FROM alpine:3.21

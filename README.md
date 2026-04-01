@@ -144,6 +144,7 @@ export PORT=3000
   - 手动触发（workflow_dispatch）
 - 推送地址：`ghcr.io/<owner>/<repo>`（当前仓库默认会推到 `ghcr.io/<owner>/rust-ws`）
 - 支持架构：`linux/amd64`、`linux/arm64`
+- CI 使用 BuildKit GHA cache + Cargo registry/git cache mount，加速第三方依赖编译
 
 使用时请确保仓库 **Settings → Actions → General** 允许工作流读取并写入 packages（`GITHUB_TOKEN` 权限）。
 如果组织策略限制 `GITHUB_TOKEN` 发布 GHCR，可在仓库 Secrets 配置 `GHCR_USERNAME` / `GHCR_TOKEN`（PAT 需包含 `write:packages`）。
