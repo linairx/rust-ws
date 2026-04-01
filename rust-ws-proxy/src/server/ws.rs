@@ -272,27 +272,27 @@ fn parse_uuid_bytes(uuid: &str) -> Option<[u8; 16]> {
 fn get_payload_offset(data: &[u8], protocol: Protocol) -> Option<usize> {
     match protocol {
         Protocol::Vless => {
-            // VLESS: version(1) + uuid(16) + addl_len(1) + addl_info + cmd(1) + atype(1) + addr + port(2)
+            // VLESS: version(1) + uuid(16) + addl_len(1) + addl_info + cmd(1) + port(2) + atype(1) + addr
             if data.len() < 18 {
                 return None;
             }
             let addl_len = data[17] as usize;
             let cmd_offset = 18 + addl_len;
-            if data.len() < cmd_offset + 2 {
+            if data.len() < cmd_offset + 4 {
                 return None;
             }
-            let atype = data[cmd_offset + 1];
-            let addr_offset = cmd_offset + 2;
+            let atype = data[cmd_offset + 3];
+            let addr_offset = cmd_offset + 4;
             match atype {
-                0x01 => Some(addr_offset + 4 + 2), // IPv4 + port
+                0x01 => Some(addr_offset + 4), // IPv4
                 0x02 => {
                     if data.len() < addr_offset {
                         return None;
                     }
                     let domain_len = data[addr_offset] as usize;
-                    Some(addr_offset + 1 + domain_len + 2)
+                    Some(addr_offset + 1 + domain_len)
                 }
-                0x03 => Some(addr_offset + 16 + 2), // IPv6 + port
+                0x03 => Some(addr_offset + 16), // IPv6
                 _ => None,
             }
         }

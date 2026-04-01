@@ -25,9 +25,9 @@ pub struct VlessRequest {
 /// - UUID (16 bytes)
 /// - Additional info length (1 byte)
 /// - Command (1 byte): 0x01=TCP, 0x02=UDP
+/// - Target port (2 bytes)
 /// - Address type (1 byte): 0x01=IPv4, 0x02=Domain, 0x03=IPv6
 /// - Target address (variable length)
-/// - Target port (2 bytes)
 pub fn parse_vless(data: &[u8]) -> Result<VlessRequest> {
     if data.len() < 20 {
         return Err(ProxyError::Parse("VLESS packet too short".to_string()));
@@ -59,28 +59,34 @@ pub fn parse_vless(data: &[u8]) -> Result<VlessRequest> {
         )));
     }
 
-    // Address type
-    let atype_offset = cmd_offset + 1;
+    // Port is after command
+    let port_offset = cmd_offset + 1;
+    if data.len() < port_offset + 2 {
+        return Err(ProxyError::Parse("VLESS packet incomplete".to_string()));
+    }
+    let port = u16::from_be_bytes([data[port_offset], data[port_offset + 1]]);
+
+    // Address type is after port
+    let atype_offset = port_offset + 2;
     if data.len() < atype_offset + 1 {
         return Err(ProxyError::Parse("VLESS packet incomplete".to_string()));
     }
     let address_type = data[atype_offset];
 
     // Parse address based on type
-    let (host, port_offset) = match address_type {
+    let host = match address_type {
         ATYPE_IPV4 => {
             let addr_offset = atype_offset + 1;
             if data.len() < addr_offset + 4 {
                 return Err(ProxyError::Parse("VLESS packet incomplete".to_string()));
             }
-            let host = format!(
+            format!(
                 "{}.{}.{}.{}",
                 data[addr_offset],
                 data[addr_offset + 1],
                 data[addr_offset + 2],
                 data[addr_offset + 3]
-            );
-            (host, addr_offset + 4)
+            )
         }
         ATYPE_DOMAIN => {
             let len_offset = atype_offset + 1;
@@ -94,7 +100,7 @@ pub fn parse_vless(data: &[u8]) -> Result<VlessRequest> {
             }
             let host = String::from_utf8_lossy(&data[domain_offset..domain_offset + domain_len])
                 .to_string();
-            (host, domain_offset + domain_len)
+            host
         }
         ATYPE_IPV6 => {
             let addr_offset = atype_offset + 1;
@@ -109,7 +115,7 @@ pub fn parse_vless(data: &[u8]) -> Result<VlessRequest> {
                     data[addr_offset + i + 1]
                 ));
             }
-            (parts.join(":"), addr_offset + 16)
+            parts.join(":")
         }
         _ => {
             return Err(ProxyError::Parse(format!(
@@ -118,12 +124,6 @@ pub fn parse_vless(data: &[u8]) -> Result<VlessRequest> {
             )));
         }
     };
-
-    // Parse port
-    if data.len() < port_offset + 2 {
-        return Err(ProxyError::Parse("VLESS packet incomplete".to_string()));
-    }
-    let port = u16::from_be_bytes([data[port_offset], data[port_offset + 1]]);
 
     Ok(VlessRequest {
         uuid,
