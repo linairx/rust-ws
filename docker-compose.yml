@@ -1,8 +1,8 @@
 services:
-  rust-ws:
+  rust-ws-proxy:
     build: .
-    image: rust-ws:latest
-    container_name: rust-ws
+    image: rust-ws-proxy:latest
+    container_name: rust-ws-proxy
     restart: unless-stopped
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
