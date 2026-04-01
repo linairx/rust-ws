@@ -1,6 +1,7 @@
 //! WebSocket handler
 
 use std::sync::Arc;
+use std::{io, net::SocketAddr};
 
 use axum::{
     extract::{
@@ -11,7 +12,7 @@ use axum::{
 };
 use futures_util::{SinkExt, StreamExt};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
+use tokio::net::{TcpStream, lookup_host};
 use tracing::{debug, error, info, warn};
 
 use rust_ws_core::{parse_shadowsocks, parse_trojan, parse_vless, sha224_hash};
@@ -179,7 +180,7 @@ async fn handle_websocket(socket: WebSocket, state: Arc<AppState>) {
 
     // Connect to target
     let target_addr = format!("{}:{}", host, port);
-    let mut target_stream = match TcpStream::connect(&target_addr).await {
+    let mut target_stream = match connect_target(&host, port).await {
         Ok(stream) => stream,
         Err(e) => {
             error!("Failed to connect to {}: {}", target_addr, e);
@@ -250,6 +251,27 @@ async fn handle_websocket(socket: WebSocket, state: Arc<AppState>) {
     }
 
     info!("Connection closed: {}:{}", host, port);
+}
+
+async fn connect_target(host: &str, port: u16) -> io::Result<TcpStream> {
+    let mut last_err: Option<io::Error> = None;
+    let addrs: Vec<SocketAddr> = lookup_host((host, port)).await?.collect();
+
+    if addrs.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::AddrNotAvailable,
+            "No address resolved",
+        ));
+    }
+
+    for addr in addrs {
+        match TcpStream::connect(addr).await {
+            Ok(stream) => return Ok(stream),
+            Err(e) => last_err = Some(e),
+        }
+    }
+
+    Err(last_err.unwrap_or_else(|| io::Error::other("Failed to connect to any resolved address")))
 }
 
 fn parse_uuid_bytes(uuid: &str) -> Option<[u8; 16]> {
