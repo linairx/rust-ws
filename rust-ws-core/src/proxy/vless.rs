@@ -52,6 +52,12 @@ pub fn parse_vless(data: &[u8]) -> Result<VlessRequest> {
     }
 
     let command = data[cmd_offset];
+    if !matches!(command, CMD_TCP | CMD_UDP) {
+        return Err(ProxyError::Parse(format!(
+            "Unknown VLESS command: {}",
+            command
+        )));
+    }
 
     // Address type
     let atype_offset = cmd_offset + 1;
@@ -86,7 +92,8 @@ pub fn parse_vless(data: &[u8]) -> Result<VlessRequest> {
             if data.len() < domain_offset + domain_len {
                 return Err(ProxyError::Parse("VLESS packet incomplete".to_string()));
             }
-            let host = String::from_utf8_lossy(&data[domain_offset..domain_offset + domain_len]).to_string();
+            let host = String::from_utf8_lossy(&data[domain_offset..domain_offset + domain_len])
+                .to_string();
             (host, domain_offset + domain_len)
         }
         ATYPE_IPV6 => {
@@ -104,7 +111,12 @@ pub fn parse_vless(data: &[u8]) -> Result<VlessRequest> {
             }
             (parts.join(":"), addr_offset + 16)
         }
-        _ => return Err(ProxyError::Parse(format!("Unknown address type: {}", address_type))),
+        _ => {
+            return Err(ProxyError::Parse(format!(
+                "Unknown address type: {}",
+                address_type
+            )));
+        }
     };
 
     // Parse port

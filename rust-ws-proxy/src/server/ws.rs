@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use axum::{
     extract::{
-        ws::{Message, WebSocket, WebSocketUpgrade},
         State,
+        ws::{Message, WebSocket, WebSocketUpgrade},
     },
     response::Response,
 };
@@ -14,7 +14,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::{debug, error, info, warn};
 
-use rust_ws_core::{parse_shadowsocks, parse_trojan, parse_vless};
+use rust_ws_core::{parse_shadowsocks, parse_trojan, parse_vless, sha224_hash};
 
 use crate::AppState;
 
@@ -47,9 +47,10 @@ pub fn detect_protocol(data: &[u8]) -> Protocol {
         // Trojan: starts with SHA224 hash (56 hex chars)
         let is_hex = data[0..56].iter().all(|&b| b.is_ascii_hexdigit());
         if is_hex && data.len() > 58 && data[56] == 0x0D && data[57] == 0x0A {
-            return Protocol::Trojan;
+            Protocol::Trojan
+        } else {
+            Protocol::Unknown
         }
-        Protocol::Trojan
     } else if data.len() > 0 && matches!(data[0], 1 | 3 | 4) {
         Protocol::Shadowsocks
     } else {
@@ -57,24 +58,72 @@ pub fn detect_protocol(data: &[u8]) -> Protocol {
     }
 }
 
+fn parse_target(
+    data: &[u8],
+    hint: Protocol,
+    expected_uuid: Option<&[u8; 16]>,
+    expected_trojan_hash: Option<&str>,
+    allow_shadowsocks: bool,
+) -> Option<(Protocol, String, u16)> {
+    let orders: &[Protocol] = match hint {
+        Protocol::Vless => &[Protocol::Vless, Protocol::Trojan, Protocol::Shadowsocks],
+        Protocol::Trojan => &[Protocol::Trojan, Protocol::Vless, Protocol::Shadowsocks],
+        Protocol::Shadowsocks => &[Protocol::Shadowsocks, Protocol::Vless, Protocol::Trojan],
+        Protocol::Unknown => &[Protocol::Vless, Protocol::Trojan, Protocol::Shadowsocks],
+    };
+
+    for p in orders {
+        match p {
+            Protocol::Vless => {
+                if let Ok(req) = parse_vless(data) {
+                    if let Some(uuid) = expected_uuid {
+                        if &req.uuid != uuid {
+                            continue;
+                        }
+                    }
+                    return Some((Protocol::Vless, req.host, req.port));
+                }
+            }
+            Protocol::Trojan => {
+                if let Ok(req) = parse_trojan(data) {
+                    if let Some(password_hash) = expected_trojan_hash {
+                        if req.password_hash != password_hash {
+                            continue;
+                        }
+                    }
+                    return Some((Protocol::Trojan, req.host, req.port));
+                }
+            }
+            Protocol::Shadowsocks => {
+                if !allow_shadowsocks {
+                    continue;
+                }
+                if let Ok(req) = parse_shadowsocks(data) {
+                    return Some((Protocol::Shadowsocks, req.host, req.port));
+                }
+            }
+            Protocol::Unknown => {}
+        }
+    }
+
+    None
+}
+
 /// Check if domain is blocked
 pub fn is_blocked_domain(host: &str) -> bool {
     let host_lower = host.to_lowercase();
-    BLOCKED_DOMAINS.iter().any(|d| {
-        host_lower == *d || host_lower.ends_with(&format!(".{}", d))
-    })
+    BLOCKED_DOMAINS
+        .iter()
+        .any(|d| host_lower == *d || host_lower.ends_with(&format!(".{}", d)))
 }
 
 /// Handle WebSocket upgrade request
-pub async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<Arc<AppState>>,
-) -> Response {
+pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
     ws.on_upgrade(move |socket| handle_websocket(socket, state))
 }
 
 /// Main WebSocket handler
-async fn handle_websocket(socket: WebSocket, _state: Arc<AppState>) {
+async fn handle_websocket(socket: WebSocket, state: Arc<AppState>) {
     let (mut ws_tx, mut ws_rx) = socket.split();
 
     // Wait for first message to determine protocol
@@ -88,9 +137,8 @@ async fn handle_websocket(socket: WebSocket, _state: Arc<AppState>) {
 
     let data: axum::body::Bytes = match first_msg {
         Message::Binary(data) => data,
-        Message::Text(text) => text.as_bytes().to_vec().into(),
         _ => {
-            warn!("First message is not binary or text");
+            debug!("First message is not binary, dropping");
             return;
         }
     };
@@ -101,34 +149,22 @@ async fn handle_websocket(socket: WebSocket, _state: Arc<AppState>) {
     }
 
     // Detect protocol
-    let protocol = detect_protocol(&data);
-    debug!("Detected protocol: {:?}", protocol);
+    let hint = detect_protocol(&data);
+    debug!("Detected protocol hint: {:?}", hint);
 
-    // Parse request based on protocol
-    let (host, port) = match protocol {
-        Protocol::Vless => match parse_vless(&data) {
-            Ok(req) => (req.host, req.port),
-            Err(e) => {
-                error!("Failed to parse VLESS: {}", e);
-                return;
-            }
-        },
-        Protocol::Trojan => match parse_trojan(&data) {
-            Ok(req) => (req.host, req.port),
-            Err(e) => {
-                error!("Failed to parse Trojan: {}", e);
-                return;
-            }
-        },
-        Protocol::Shadowsocks => match parse_shadowsocks(&data) {
-            Ok(req) => (req.host, req.port),
-            Err(e) => {
-                error!("Failed to parse Shadowsocks: {}", e);
-                return;
-            }
-        },
-        Protocol::Unknown => {
-            error!("Unknown protocol");
+    let expected_uuid = parse_uuid_bytes(&state.config.uuid);
+    let expected_trojan_hash = sha224_hash(&state.config.uuid);
+
+    let (protocol, host, port) = match parse_target(
+        &data,
+        hint,
+        expected_uuid.as_ref(),
+        Some(expected_trojan_hash.as_str()),
+        state.config.allow_shadowsocks,
+    ) {
+        Some(parsed) => parsed,
+        None => {
+            debug!("Unable to parse first packet as authorized VLESS/Trojan/Shadowsocks");
             return;
         }
     };
@@ -214,6 +250,22 @@ async fn handle_websocket(socket: WebSocket, _state: Arc<AppState>) {
     }
 
     info!("Connection closed: {}:{}", host, port);
+}
+
+fn parse_uuid_bytes(uuid: &str) -> Option<[u8; 16]> {
+    let hex = uuid.replace('-', "");
+    if hex.len() != 32 {
+        return None;
+    }
+
+    let mut out = [0u8; 16];
+    for (i, byte) in out.iter_mut().enumerate() {
+        let idx = i * 2;
+        let chunk = &hex[idx..idx + 2];
+        let value = u8::from_str_radix(chunk, 16).ok()?;
+        *byte = value;
+    }
+    Some(out)
 }
 
 /// Get the offset where payload starts in the first packet
