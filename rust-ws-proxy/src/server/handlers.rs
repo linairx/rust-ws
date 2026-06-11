@@ -4,13 +4,13 @@ use std::sync::Arc;
 
 use axum::{
     extract::State,
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     response::{Html, IntoResponse},
 };
 use tracing::{error, info};
 
-use crate::server::handlers::network::get_public_ip;
 use crate::AppState;
+use crate::server::handlers::network::get_public_ip;
 
 /// Home page handler
 pub async fn index() -> impl IntoResponse {
@@ -21,14 +21,20 @@ pub async fn index() -> impl IntoResponse {
 pub async fn subscription(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let config = &state.config;
 
-    // Get host from config or detect public IP
-    let host = if !config.domain.is_empty() {
-        config.domain.clone()
+    let runtime_argo_domain = state.argo_domain.read().await.clone();
+
+    // Prefer Argo domain for subscription links when available.
+    let (host, port, tls) = if let Some(domain) = runtime_argo_domain {
+        (domain, 443, true)
+    } else if !config.argo_domain.is_empty() {
+        (config.argo_domain.clone(), 443, true)
+    } else if !config.domain.is_empty() {
+        (config.domain.clone(), config.port, false)
     } else {
         match get_public_ip(&state.client).await {
             Ok(ip) => {
                 info!("Detected public IP: {}", ip);
-                ip
+                (ip, config.port, false)
             }
             Err(e) => {
                 error!("Failed to get public IP: {}", e);
@@ -41,22 +47,29 @@ pub async fn subscription(State(state): State<Arc<AppState>>) -> impl IntoRespon
         }
     };
 
-    let port = config.port;
-
     // Use rust-ws-core for subscription generation
-    use rust_ws_core::{generate_subscription, NodeConfig};
+    use rust_ws_core::{NodeConfig, SubscriptionOptions, generate_subscription_with_options};
     let node_config = NodeConfig::new(
         config.uuid.clone(),
         config.name.clone(),
         config.ws_path.clone(),
     );
-    let sub_content = generate_subscription(&node_config, &host, port);
+    let sub_options = SubscriptionOptions {
+        tls,
+        host: tls.then(|| host.clone()),
+        sni: tls.then(|| host.clone()),
+        include_shadowsocks: config.allow_shadowsocks && !tls,
+    };
+    let sub_content = generate_subscription_with_options(&node_config, &host, port, &sub_options);
 
     (
         StatusCode::OK,
         [
             (header::CONTENT_TYPE, "text/plain; charset=utf-8"),
-            (header::CONTENT_DISPOSITION, "attachment; filename=\"subscription.txt\""),
+            (
+                header::CONTENT_DISPOSITION,
+                "attachment; filename=\"subscription.txt\"",
+            ),
         ],
         sub_content,
     )
@@ -93,10 +106,7 @@ pub mod network {
             .await
             .map_err(|e| e.to_string())?;
 
-        let ip = response
-            .text()
-            .await
-            .map_err(|e| e.to_string())?;
+        let ip = response.text().await.map_err(|e| e.to_string())?;
 
         Ok(ip.trim().to_string())
     }
@@ -110,10 +120,7 @@ pub mod network {
             .await
             .map_err(|e| e.to_string())?;
 
-        let info: GeoIpInfo = response
-            .json()
-            .await
-            .map_err(|e| e.to_string())?;
+        let info: GeoIpInfo = response.json().await.map_err(|e| e.to_string())?;
 
         Ok(info)
     }

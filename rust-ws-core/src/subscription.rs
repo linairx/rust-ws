@@ -4,8 +4,6 @@
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 
-use crate::utils::sha224_hash;
-
 /// Node configuration for subscription generation
 #[derive(Debug, Clone)]
 pub struct NodeConfig {
@@ -17,32 +15,104 @@ pub struct NodeConfig {
 impl NodeConfig {
     /// Create a new node configuration
     pub fn new(uuid: String, name: String, ws_path: String) -> Self {
-        Self { uuid, name, ws_path }
+        Self {
+            uuid,
+            name,
+            ws_path,
+        }
+    }
+}
+
+/// Transport options for subscription URL generation.
+#[derive(Debug, Clone)]
+pub struct SubscriptionOptions {
+    pub tls: bool,
+    pub host: Option<String>,
+    pub sni: Option<String>,
+    pub include_shadowsocks: bool,
+}
+
+impl Default for SubscriptionOptions {
+    fn default() -> Self {
+        Self {
+            tls: false,
+            host: None,
+            sni: None,
+            include_shadowsocks: true,
+        }
     }
 }
 
 /// Generate VLESS subscription URL
 pub fn generate_vless_url(config: &NodeConfig, host: &str, port: u16) -> String {
+    generate_vless_url_with_options(config, host, port, &SubscriptionOptions::default())
+}
+
+/// Generate VLESS subscription URL with transport options
+pub fn generate_vless_url_with_options(
+    config: &NodeConfig,
+    host: &str,
+    port: u16,
+    options: &SubscriptionOptions,
+) -> String {
+    let security = if options.tls { "tls" } else { "none" };
+    let mut params = vec![
+        "encryption=none".to_string(),
+        format!("security={security}"),
+        "type=ws".to_string(),
+    ];
+
+    if let Some(sni) = &options.sni {
+        params.push(format!("sni={}", urlencoding::encode(sni)));
+    }
+
+    if let Some(host_header) = &options.host {
+        params.push(format!("host={}", urlencoding::encode(host_header)));
+    }
+
+    params.push(format!("path=/{}", urlencoding::encode(&config.ws_path)));
+
     format!(
-        "vless://{}@{}:{}?encryption=none&security=none&type=ws&path=/{}#{}",
+        "vless://{}@{}:{}?{}#{}",
         config.uuid,
         host,
         port,
-        config.ws_path,
+        params.join("&"),
         urlencoding::encode(&config.name)
     )
 }
 
 /// Generate Trojan subscription URL
 pub fn generate_trojan_url(config: &NodeConfig, host: &str, port: u16) -> String {
-    // Trojan password is the UUID itself
-    let password_hash = sha224_hash(&config.uuid);
+    generate_trojan_url_with_options(config, host, port, &SubscriptionOptions::default())
+}
+
+/// Generate Trojan subscription URL with transport options
+pub fn generate_trojan_url_with_options(
+    config: &NodeConfig,
+    host: &str,
+    port: u16,
+    options: &SubscriptionOptions,
+) -> String {
+    let security = if options.tls { "tls" } else { "none" };
+    let mut params = vec![format!("security={security}"), "type=ws".to_string()];
+
+    if let Some(sni) = &options.sni {
+        params.push(format!("sni={}", urlencoding::encode(sni)));
+    }
+
+    if let Some(host_header) = &options.host {
+        params.push(format!("host={}", urlencoding::encode(host_header)));
+    }
+
+    params.push(format!("path=/{}", urlencoding::encode(&config.ws_path)));
+
     format!(
-        "trojan://{}@{}:{}?security=none&type=ws&path=/{}#{}",
-        password_hash,
+        "trojan://{}@{}:{}?{}#{}",
+        config.uuid,
         host,
         port,
-        config.ws_path,
+        params.join("&"),
         urlencoding::encode(&config.name)
     )
 }
@@ -62,11 +132,26 @@ pub fn generate_shadowsocks_url(config: &NodeConfig, host: &str, port: u16) -> S
 
 /// Generate full subscription content (Base64 encoded)
 pub fn generate_subscription(config: &NodeConfig, host: &str, port: u16) -> String {
+    generate_subscription_with_options(config, host, port, &SubscriptionOptions::default())
+}
+
+/// Generate full subscription content with transport options (Base64 encoded)
+pub fn generate_subscription_with_options(
+    config: &NodeConfig,
+    host: &str,
+    port: u16,
+    options: &SubscriptionOptions,
+) -> String {
     let mut urls = Vec::new();
 
-    urls.push(generate_vless_url(config, host, port));
-    urls.push(generate_trojan_url(config, host, port));
-    urls.push(generate_shadowsocks_url(config, host, port));
+    urls.push(generate_vless_url_with_options(config, host, port, options));
+    urls.push(generate_trojan_url_with_options(
+        config, host, port, options,
+    ));
+
+    if options.include_shadowsocks {
+        urls.push(generate_shadowsocks_url(config, host, port));
+    }
 
     let combined = urls.join("\n");
     BASE64.encode(combined)

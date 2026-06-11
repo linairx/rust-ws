@@ -22,6 +22,16 @@ pub struct Config {
     pub debug: bool,
     #[serde(default)]
     pub allow_shadowsocks: bool,
+    #[serde(default)]
+    pub argo_enabled: bool,
+    #[serde(default)]
+    pub argo_domain: String,
+    #[serde(default)]
+    pub argo_auth: String,
+    #[serde(default = "default_cloudflared_path")]
+    pub cloudflared_path: String,
+    #[serde(default = "default_file_path")]
+    pub file_path: String,
 }
 
 fn default_uuid() -> String {
@@ -38,6 +48,14 @@ fn default_sub_path() -> String {
 
 fn default_ws_path() -> String {
     "7bd180e8".to_string()
+}
+
+fn default_cloudflared_path() -> String {
+    "cloudflared".to_string()
+}
+
+fn default_file_path() -> String {
+    ".tmp".to_string()
 }
 
 impl Config {

@@ -29,49 +29,55 @@ pub fn parse_shadowsocks(data: &[u8]) -> Result<ShadowsocksRequest> {
     let (host, port_offset) = match address_type {
         ATYPE_IPV4 => {
             if data.len() < 7 {
-                return Err(ProxyError::Parse("Shadowsocks packet incomplete".to_string()));
+                return Err(ProxyError::Parse(
+                    "Shadowsocks packet incomplete".to_string(),
+                ));
             }
-            let host = format!(
-                "{}.{}.{}.{}",
-                data[1],
-                data[2],
-                data[3],
-                data[4]
-            );
+            let host = format!("{}.{}.{}.{}", data[1], data[2], data[3], data[4]);
             (host, 5)
         }
         ATYPE_DOMAIN => {
             if data.len() < 2 {
-                return Err(ProxyError::Parse("Shadowsocks packet incomplete".to_string()));
+                return Err(ProxyError::Parse(
+                    "Shadowsocks packet incomplete".to_string(),
+                ));
             }
             let domain_len = data[1] as usize;
             let domain_offset = 2;
             if data.len() < domain_offset + domain_len + 2 {
-                return Err(ProxyError::Parse("Shadowsocks packet incomplete".to_string()));
+                return Err(ProxyError::Parse(
+                    "Shadowsocks packet incomplete".to_string(),
+                ));
             }
-            let host = String::from_utf8_lossy(&data[domain_offset..domain_offset + domain_len]).to_string();
+            let host = String::from_utf8_lossy(&data[domain_offset..domain_offset + domain_len])
+                .to_string();
             (host, domain_offset + domain_len)
         }
         ATYPE_IPV6 => {
             if data.len() < 19 {
-                return Err(ProxyError::Parse("Shadowsocks packet incomplete".to_string()));
+                return Err(ProxyError::Parse(
+                    "Shadowsocks packet incomplete".to_string(),
+                ));
             }
             let mut parts = Vec::new();
             for i in (1..17).step_by(2) {
-                parts.push(format!(
-                    "{:02x}{:02x}",
-                    data[i],
-                    data[i + 1]
-                ));
+                parts.push(format!("{:02x}{:02x}", data[i], data[i + 1]));
             }
             (parts.join(":"), 17)
         }
-        _ => return Err(ProxyError::Parse(format!("Unknown address type: {}", address_type))),
+        _ => {
+            return Err(ProxyError::Parse(format!(
+                "Unknown address type: {}",
+                address_type
+            )))
+        }
     };
 
     // Parse port
     if data.len() < port_offset + 2 {
-        return Err(ProxyError::Parse("Shadowsocks packet incomplete".to_string()));
+        return Err(ProxyError::Parse(
+            "Shadowsocks packet incomplete".to_string(),
+        ));
     }
     let port = u16::from_be_bytes([data[port_offset], data[port_offset + 1]]);
 

@@ -4,6 +4,7 @@
 //! - WebSocket proxy for VLESS, Trojan, Shadowsocks protocols
 //! - HTTP endpoints for health check and subscription
 
+mod argo;
 mod config;
 mod server;
 
@@ -15,6 +16,7 @@ use axum::{
     routing::{any, get},
 };
 use reqwest::Client;
+use tokio::sync::RwLock;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
 use tracing::{error, info};
@@ -28,6 +30,7 @@ use crate::server::{handlers, ws_handler};
 pub struct AppState {
     pub config: Config,
     pub client: Client,
+    pub argo_domain: argo::SharedArgoDomain,
 }
 
 #[tokio::main]
@@ -60,14 +63,23 @@ async fn run() -> anyhow::Result<()> {
     info!("Starting WebSocket Proxy Server on port {}", port);
     info!("WebSocket path: /{}", ws_path);
     info!("Subscription path: /{}", sub_path);
+    if config.argo_enabled {
+        info!("Argo tunnel enabled");
+    }
 
     // Create HTTP client
     let client = Client::builder().timeout(Duration::from_secs(30)).build()?;
+    let argo_domain = Arc::new(RwLock::new(if config.argo_domain.is_empty() {
+        None
+    } else {
+        Some(config.argo_domain.clone())
+    }));
 
     // Create shared state
     let state = Arc::new(AppState {
         config: config.clone(),
         client: client.clone(),
+        argo_domain: argo_domain.clone(),
     });
 
     // Build router
@@ -102,6 +114,17 @@ async fn run() -> anyhow::Result<()> {
         let client_clone = client.clone();
         tokio::spawn(async move {
             auto_access_task(config_clone, client_clone).await;
+        });
+    }
+
+    // Start Argo tunnel task if enabled
+    if config.argo_enabled {
+        let config_clone = config.clone();
+        let argo_domain_clone = argo_domain.clone();
+        tokio::spawn(async move {
+            if let Err(e) = argo::start_tunnel(config_clone, argo_domain_clone).await {
+                error!("Argo tunnel task failed: {e:#}");
+            }
         });
     }
 

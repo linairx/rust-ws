@@ -35,6 +35,7 @@ rust-ws/
 - 🔌 **多协议支持**: VLESS、Trojan、Shadowsocks
 - 🌐 **WebSocket 传输**: 基于 WebSocket 的代理传输
 - 📡 **订阅生成**: 自动生成客户端订阅链接
+- 🌉 **Argo 隧道**: 可通过 cloudflared 暴露 WebSocket 入口
 - 🚀 **高性能**: 基于 Tokio 异步运行时
 - 🐳 **Docker 支持**: 开箱即用的容器化部署
 
@@ -73,6 +74,39 @@ export PORT=3000
 | `AUTO_ACCESS` | `false` | 自动保活 |
 | `DEBUG` | `false` | 调试模式 |
 | `ALLOW_SHADOWSOCKS` | `false` | 是否允许 Shadowsocks 首包解析（公网建议关闭） |
+| `ARGO_ENABLED` | `false` | 是否启动 Cloudflare Argo Tunnel |
+| `ARGO_DOMAIN` | (空) | 固定隧道域名；为空且启用 Argo 时使用临时隧道 |
+| `ARGO_AUTH` | (空) | 固定隧道 token 或 Cloudflare tunnel JSON；为空时使用临时隧道 |
+| `CLOUDFLARED_PATH` | `cloudflared` | cloudflared 可执行文件路径 |
+| `FILE_PATH` | `.tmp` | 运行时文件目录，用于保存固定隧道 JSON/YAML |
+
+### Argo 隧道
+
+`rust-ws-proxy` 不再额外启动 xray，Argo 只负责把公网 Cloudflare 隧道流量转发到本地 Rust WebSocket 服务：
+
+```text
+client -> Cloudflare Argo domain:443 -> cloudflared -> 127.0.0.1:PORT -> /WS_PATH
+```
+
+固定隧道 token 模式：
+
+```bash
+export ARGO_ENABLED=true
+export ARGO_DOMAIN=your-tunnel.example.com
+export ARGO_AUTH=your-cloudflare-tunnel-token
+./target/release/rust-ws-proxy
+```
+
+临时隧道模式：
+
+```bash
+export ARGO_ENABLED=true
+unset ARGO_DOMAIN
+unset ARGO_AUTH
+./target/release/rust-ws-proxy
+```
+
+启用 Argo 后，订阅会优先使用 Argo 域名并生成 `TLS + 443 + WebSocket host/sni/path` 的 VLESS/Trojan 节点。临时隧道需要等 cloudflared 输出 `trycloudflare.com` 域名后，`/{sub_path}` 才会切换到 Argo 域名。
 
 ## API 端点
 

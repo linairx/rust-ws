@@ -22,6 +22,18 @@ FROM alpine:3.21
 
 RUN apk add --no-cache ca-certificates tzdata wget
 
+ARG TARGETARCH
+RUN set -eux; \
+    case "${TARGETARCH:-amd64}" in \
+      amd64) cloudflared_arch="amd64" ;; \
+      arm64) cloudflared_arch="arm64" ;; \
+      arm) cloudflared_arch="arm" ;; \
+      *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    wget -O /usr/local/bin/cloudflared "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${cloudflared_arch}"; \
+    chmod +x /usr/local/bin/cloudflared; \
+    cloudflared --version
+
 WORKDIR /app
 
 # Copy the binary
@@ -47,6 +59,11 @@ ENV NAME=""
 ENV AUTO_ACCESS=false
 ENV DEBUG=false
 ENV ALLOW_SHADOWSOCKS=false
+ENV ARGO_ENABLED=false
+ENV ARGO_DOMAIN=""
+ENV ARGO_AUTH=""
+ENV CLOUDFLARED_PATH=cloudflared
+ENV FILE_PATH=.tmp
 
 EXPOSE ${PORT}
 

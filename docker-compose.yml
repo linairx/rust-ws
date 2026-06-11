@@ -16,6 +16,11 @@ services:
       - AUTO_ACCESS=${AUTO_ACCESS:-false}
       - DEBUG=${DEBUG:-false}
       - ALLOW_SHADOWSOCKS=${ALLOW_SHADOWSOCKS:-false}
+      - ARGO_ENABLED=${ARGO_ENABLED:-false}
+      - ARGO_DOMAIN=${ARGO_DOMAIN:-}
+      - ARGO_AUTH=${ARGO_AUTH:-}
+      - CLOUDFLARED_PATH=${CLOUDFLARED_PATH:-cloudflared}
+      - FILE_PATH=${FILE_PATH:-.tmp}
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${PORT:-3000}/health"]
       interval: 30s
