@@ -497,23 +497,6 @@ async def http_handler(request):
 
 
 # ============== Main ==============
-async def add_access_task():
-    """Add auto access task"""
-    if not AUTO_ACCESS or not DOMAIN:
-        return
-
-    full_url = f"https://{DOMAIN}/{SUB_PATH}"
-    try:
-        import aiohttp
-        async with aiohttp.ClientSession() as session:
-            await session.post("https://oooo.serv00.net/add-url",
-                             json={"url": full_url},
-                             headers={'Content-Type': 'application/json'})
-        logger.info('Auto access task added')
-    except:
-        pass
-
-
 async def main():
     app = web.Application()
 
@@ -530,10 +513,6 @@ async def main():
     await site.start()
 
     logger.info(f"Server running on port {PORT}")
-    logger.info(f"WebSocket path: /{WS_PATH}")
-    logger.info(f"Subscription path: /{SUB_PATH}")
-
-    await add_access_task()
 
     try:
         await asyncio.Future()
